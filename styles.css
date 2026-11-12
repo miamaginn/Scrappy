@@ -355,8 +355,14 @@ a.spine.is-pulling { transform: translateY(-60px) rotate(-4deg) scale(1.04); tra
 .is-editing .page { overflow: visible; }
 
 .bg-cream { background: var(--paper); }
-.bg-lined { background: repeating-linear-gradient(transparent 0 31px, rgba(39, 64, 94, 0.2) 31px 32px), #fffdf7; }
-.bg-grid { background: linear-gradient(rgba(39, 64, 94, 0.13) 1px, transparent 1px) 0 0 / 30px 30px, linear-gradient(90deg, rgba(39, 64, 94, 0.13) 1px, transparent 1px) 0 0 / 30px 30px, #fffdf7; }
+/* Ruled lines stay about 1.3 screen pixels thick at any zoom, so none vanish when the page is scaled down */
+.bg-lined { background: linear-gradient(transparent calc(32px - 1.3px / var(--s)), rgba(39, 64, 94, 0.22) 0) 0 0 / 100% 32px, #fffdf7; }
+.bg-grid {
+  background:
+    linear-gradient(rgba(39, 64, 94, 0.14) calc(1.3px / var(--s)), transparent 0) 0 0 / 30px 30px,
+    linear-gradient(90deg, rgba(39, 64, 94, 0.14) calc(1.3px / var(--s)), transparent 0) 0 0 / 30px 30px,
+    #fffdf7;
+}
 .bg-dots { background: radial-gradient(rgba(22, 20, 18, 0.26) 1.3px, transparent 1.6px) 0 0 / 24px 24px, var(--paper); }
 .bg-kraft { background: repeating-linear-gradient(92deg, rgba(90, 60, 25, 0.05) 0 3px, transparent 3px 7px), #cfae83; }
 .bg-blush { background: #f6dcd3; }
