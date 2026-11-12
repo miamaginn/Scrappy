@@ -472,7 +472,7 @@ a.spine.is-pulling { transform: translateY(-60px) rotate(-4deg) scale(1.04); tra
 .photo__empty { display: grid; place-items: center; height: 100%; font-style: italic; font-size: 19px; color: var(--ink-soft); }
 
 .photo--polaroid { padding: 12px 12px 0; background: #fffdf9; box-shadow: 0 8px 16px -8px rgba(40, 28, 12, 0.55); }
-.photo__caption { height: 46px; padding-top: 6px; overflow: hidden; font-family: Caveat, cursive; font-size: 25px; line-height: 1.2; text-align: center; color: #161412; }
+.photo__caption { flex: none; min-height: 46px; padding: 6px 0 8px; font-family: Caveat, cursive; font-size: 25px; line-height: 1.2; text-align: center; color: #161412; }
 .photo--plain { padding: 10px; background: #fffdf9; box-shadow: 0 8px 16px -8px rgba(40, 28, 12, 0.55); }
 .photo--none .photo__img { background: none; }
 .photo--none .photo__img img { object-fit: contain; }

@@ -885,11 +885,25 @@
     const sel = getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
+
+    // A Polaroid grows taller as its caption wraps, so the photo keeps its size
+    const box = itemEl(it.id);
+    const photo = target.dataset.field === "caption" && box.querySelector(".photo__img");
+    const photoH = photo && photo.offsetHeight;
+    const fitCaption = () => {
+      it.h = photoH + 12 + target.offsetHeight;
+      box.style.cssText = boxStyle(it);
+    };
+    if (photo) target.addEventListener("input", fitCaption);
+
     target.addEventListener("blur", () => {
+      if (photo) {
+        target.removeEventListener("input", fitCaption);
+        fitCaption();
+      }
       target.removeAttribute("contenteditable");
       it[target.dataset.field] = target.innerText.replace(/\n+$/, "");
       if (!it[target.dataset.field]) target.textContent = "";
-      const box = itemEl(it.id);
       const need = Math.max(box.scrollHeight, target.closest(".note,.postit") ? target.closest(".note,.postit").scrollHeight : 0);
       if (need > it.h && it.type !== "photo") {
         it.h = need;
