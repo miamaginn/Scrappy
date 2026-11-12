@@ -425,28 +425,39 @@ a.spine.is-pulling { transform: translateY(-60px) rotate(-4deg) scale(1.04); tra
 
 .t { min-height: 100%; line-height: 1.15; }
 
+/* Post-it and note spacing is in em, so everything scales with their text size */
 .postit {
   width: 100%;
   height: 100%;
-  padding: 18px 16px;
+  padding: 0.62em 0.55em;
+  font-size: 29px;
   box-shadow: 2px 6px 10px -4px rgba(40, 28, 12, 0.4);
   border-bottom-right-radius: 36px 6px;
 }
-.postit__text { min-height: 100%; font-family: Caveat, cursive; font-size: 29px; line-height: 1.18; color: #161412; }
+.postit__text { min-height: 100%; font-family: Caveat, cursive; line-height: 1.18; color: #161412; }
 
 .note {
   width: 100%;
   height: 100%;
-  padding: 18px 20px 14px;
-  background:
-    linear-gradient(transparent 72px, rgba(168, 64, 47, 0.45) 72px, rgba(168, 64, 47, 0.45) 73px, transparent 73px),
-    var(--note, #fffdf7);
+  padding: 0.72em 0.8em 0.56em;
+  font-size: 25px;
+  background: var(--note, #fffdf7);
   box-shadow: 0 6px 12px -6px rgba(40, 28, 12, 0.45);
   color: #161412;
 }
-.note__when { font-family: "Special Elite", monospace; font-size: 13px; letter-spacing: 0.04em; color: var(--ink-soft); min-height: 17px; }
-.note__title { font-family: var(--party); font-style: italic; font-size: 22px; line-height: 1.2; min-height: 27px; }
-.note__text { margin-top: 18px; font-family: Caveat, cursive; font-size: 25px; line-height: 1.18; min-height: 30px; }
+.note__when { font-family: "Special Elite", monospace; font-size: 0.52em; letter-spacing: 0.04em; opacity: 0.7; min-height: 1.3em; }
+.note__title {
+  font-family: var(--note-font, var(--party));
+  font-style: italic;
+  font-size: 0.88em;
+  line-height: 1.2;
+  min-height: 1.2em;
+  padding-bottom: 0.3em;
+  margin-right: -0.9em;
+  border-bottom: 1px solid rgba(168, 64, 47, 0.45);
+}
+.note[style*="--note-font"] .note__title { font-style: normal; }
+.note__text { margin-top: 0.5em; font-family: var(--note-font, Caveat, cursive); line-height: 1.18; min-height: 1.2em; }
 
 .photo { width: 100%; height: 100%; margin: 0; display: flex; flex-direction: column; }
 .photo__img { flex: 1; min-height: 0; overflow: hidden; background: #e7dfcf; }

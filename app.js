@@ -18,6 +18,8 @@
     Elegant: "'Playfair Display', serif",
     Typewriter: "'Special Elite', monospace"
   };
+  // Starting text size for each kind of writing, in page pixels
+  const TEXT_SIZE = { text: 40, postit: 29, note: 25 };
   const PEN_COLORS = ["#161412", "#a8402f", "#e06c4c", "#e58fa7", "#f2c94c", "#2e7d5b", "#2f6fa8", "#7b5ea7", "#ffffff"];
   const PENS = {
     Fine: { width: 3 },
@@ -371,11 +373,12 @@
     if (it.type === "text") {
       inner = `<div class="t" data-field="text" data-ph="Type here" style="font-family:${esc(it.font)};font-size:${it.size}px;color:${esc(it.color)};text-align:${esc(it.align || "left")}">${esc(it.text)}</div>`;
     } else if (it.type === "postit") {
-      const look = `${it.font ? `font-family:${esc(it.font)};` : ""}${it.size ? `font-size:${it.size}px;` : ""}${it.ink ? `color:${esc(it.ink)};` : ""}`;
-      inner = `<div class="postit" style="background:${esc(it.color)}"><div class="postit__text" data-field="text" data-ph="Write a note" style="${look}">${esc(it.text)}</div></div>`;
+      const look = `${it.font ? `font-family:${esc(it.font)};` : ""}${it.ink ? `color:${esc(it.ink)};` : ""}`;
+      inner = `<div class="postit" style="background:${esc(it.color)};font-size:${it.size || TEXT_SIZE.postit}px"><div class="postit__text" data-field="text" data-ph="Write a note" style="${look}">${esc(it.text)}</div></div>`;
     } else if (it.type === "note") {
+      const look = `--note:${esc(it.color || "#fffdf7")};font-size:${it.size || TEXT_SIZE.note}px;${it.ink ? `color:${esc(it.ink)};` : ""}${it.font ? `--note-font:${esc(it.font)};` : ""}`;
       inner = `
-        <div class="note" style="--note:${esc(it.color || "#fffdf7")}">
+        <div class="note" style="${look}">
           ${field("when", it.when, "Day / time", "note__when")}
           ${field("title", it.title, "What we did", "note__title")}
           ${field("text", it.text, "How it went...", "note__text")}
@@ -785,7 +788,8 @@
 
   function gesture(down, el, it, kind, wasSelected) {
     const s = state.scale;
-    const start = { x: it.x, y: it.y, w: it.w, h: it.h, rot: it.rot || 0 };
+    const start = { x: it.x, y: it.y, w: it.w, h: it.h, rot: it.rot || 0, size: it.size || TEXT_SIZE[it.type] };
+    const paper = el.querySelector(".postit, .note");
     const keepShape = it.type === "sticker" && !(it.graphic || "").startsWith("tape");
     let moved = false;
 
@@ -817,6 +821,11 @@
         it.h = Math.round(h);
         it.x = Math.round(left + (w / 2) * cos - (h / 2) * sin - w / 2);
         it.y = Math.round(top + (w / 2) * sin + (h / 2) * cos - h / 2);
+        // Post-its and notes scale their writing with their width
+        if (paper) {
+          it.size = Math.max(8, Math.round(start.size * (w / start.w) * 2) / 2);
+          paper.style.fontSize = `${it.size}px`;
+        }
       } else {
         const r = el.getBoundingClientRect();
         const deg = (Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180) / Math.PI + 90;
@@ -906,8 +915,9 @@
         <button class="text-link text-link--danger" type="button" data-act="delete-page">Delete page ${state.active + 1}</button>`;
       return;
     }
-    const textControls = (font, ink) => `
+    const textControls = (font, ink, classic) => `
         <select data-change="font" aria-label="Font">
+          ${classic ? `<option value="" ${font ? "" : "selected"}>Classic</option>` : ""}
           ${Object.entries(FONTS).map(([n, f]) => `<option value="${esc(f)}" ${f === font ? "selected" : ""}>${n}</option>`).join("")}
         </select>
         <button class="mini" type="button" data-act="size" data-v="-4" aria-label="Smaller text">A−</button>
@@ -925,7 +935,10 @@
         <span class="context__label">Paper</span>
         ${swatches(NOTE_COLORS, "paper", it.color)}`;
     } else if (it.type === "note") {
-      own = swatches(["#fffdf7", ...NOTE_COLORS], "paper", it.color);
+      own = `
+        ${textControls(it.font || "", it.ink || "#161412", true)}
+        <span class="context__label">Paper</span>
+        ${swatches(["#fffdf7", ...NOTE_COLORS], "paper", it.color)}`;
     } else if (it.type === "photo") {
       own = `
         <select data-change="frame" aria-label="Photo frame">
@@ -1181,8 +1194,8 @@
 
   /* ---------- Buttons ---------- */
 
-  // A post-it's color is its paper, so its writing color is kept as ink
-  const inkField = () => (find(state.sel).type === "postit" ? "ink" : "color");
+  // A post-it's or note's color is its paper, so its writing color is kept as ink
+  const inkField = () => (["postit", "note"].includes(find(state.sel).type) ? "ink" : "color");
 
   const stickerSize = (b) => {
     if (b.dataset.graphic) {
@@ -1271,7 +1284,7 @@
     remove: removeSelected,
     size: (b) => {
       const it = find(state.sel);
-      update({ size: Math.max(12, (it.size || (it.type === "postit" ? 29 : 40)) + +b.dataset.v) });
+      update({ size: Math.max(8, (it.size || TEXT_SIZE[it.type]) + +b.dataset.v) });
     },
     align: () => update({ align: { left: "center", center: "right", right: "left" }[find(state.sel).align || "left"] }),
     ink: (b) => update({ [inkField()]: b.dataset.v }),
