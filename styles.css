@@ -286,6 +286,22 @@ a.spine.is-pulling { transform: translateY(-60px) rotate(-4deg) scale(1.04); tra
 .sticker--g { width: 4.2rem; }
 .sticker--g svg { width: 100%; height: 100%; display: block; }
 
+.draw-bar__row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+.draw-bar__gap { width: 0.6rem; }
+.draw-bar input[type="color"] { width: 2.1rem; height: 1.9rem; padding: 2px; border: 1px solid var(--rule); border-radius: 5px; background: var(--paper); cursor: pointer; }
+.mini.is-on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.is-drawing .page { cursor: crosshair; }
+.is-drawing .sheet { touch-action: none; }
+.is-drawing .item { cursor: crosshair; }
+/* Doodles only catch clicks on their lines, so things under them stay reachable */
+.item--draw { pointer-events: none; }
+.item--draw path { pointer-events: none; }
+.is-editing .item--draw path.hit { pointer-events: stroke; }
+.is-editing .item--draw .handle { pointer-events: auto; }
+
+.ink-live { position: absolute; inset: 0; width: 600px; height: 800px; overflow: visible; pointer-events: none; z-index: 50; }
+.context__label { margin-left: 0.4rem; font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
+
 .bg-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .bg-chip { width: 4.6rem; height: 3.2rem; border: 1px solid var(--rule); border-radius: 4px; cursor: pointer; font-size: 0.82rem; }
 .bg-chip.is-on { outline: 2px solid var(--ink); outline-offset: 1px; }

@@ -18,6 +18,13 @@
     Elegant: "'Playfair Display', serif",
     Typewriter: "'Special Elite', monospace"
   };
+  const PEN_COLORS = ["#161412", "#a8402f", "#e06c4c", "#e58fa7", "#f2c94c", "#2e7d5b", "#2f6fa8", "#7b5ea7", "#ffffff"];
+  const PENS = {
+    Fine: { width: 3 },
+    Pen: { width: 6 },
+    Marker: { width: 12 },
+    Highlighter: { width: 24, alpha: 0.4 }
+  };
   const BACKGROUNDS = { cream: "Cream", lined: "Lined", grid: "Grid", dots: "Dots", kraft: "Kraft", blush: "Blush", sky: "Sky", night: "Night" };
   const FRAMES = { polaroid: "Polaroid", plain: "White border", none: "No border" };
 
@@ -50,8 +57,10 @@
 
   const state = {
     book: null, first: 0, active: 0, sel: null, editing: false,
-    undo: [], redo: [], scale: 1, maps: new Map(), saveTimer: null, drawer: null
+    undo: [], redo: [], scale: 1, maps: new Map(), saveTimer: null, drawer: null,
+    pen: { color: "#161412", kind: "Pen" }, doodle: null
   };
+  const drawing = () => state.drawer === "draw";
   const single = () => matchMedia("(max-width: 760px)").matches;
   const canEdit = () => {
     const b = state.book;
@@ -274,6 +283,7 @@
             <button class="tool" type="button" data-act="add-note">Activity note</button>
             <button class="tool" type="button" data-act="add-postit">Post-it</button>
             <button class="tool" type="button" data-act="drawer" data-drawer="stickers">Stickers</button>
+            <button class="tool" type="button" data-act="drawer" data-drawer="draw">Draw</button>
             <button class="tool" type="button" data-act="add-map">Map</button>
             <button class="tool" type="button" data-act="drawer" data-drawer="page">Page style</button>
             <button class="tool" type="button" data-act="add-pages">Add pages</button>
@@ -361,7 +371,8 @@
     if (it.type === "text") {
       inner = `<div class="t" data-field="text" data-ph="Type here" style="font-family:${esc(it.font)};font-size:${it.size}px;color:${esc(it.color)};text-align:${esc(it.align || "left")}">${esc(it.text)}</div>`;
     } else if (it.type === "postit") {
-      inner = `<div class="postit" style="background:${esc(it.color)}"><div class="postit__text" data-field="text" data-ph="Write a note">${esc(it.text)}</div></div>`;
+      const look = `${it.font ? `font-family:${esc(it.font)};` : ""}${it.size ? `font-size:${it.size}px;` : ""}${it.ink ? `color:${esc(it.ink)};` : ""}`;
+      inner = `<div class="postit" style="background:${esc(it.color)}"><div class="postit__text" data-field="text" data-ph="Write a note" style="${look}">${esc(it.text)}</div></div>`;
     } else if (it.type === "note") {
       inner = `
         <div class="note" style="--note:${esc(it.color || "#fffdf7")}">
@@ -386,8 +397,97 @@
         : `<svg viewBox="0 0 100 100"><text x="50" y="54" text-anchor="middle" dominant-baseline="central" font-size="78">${esc(it.emoji)}</text></svg>`;
     } else if (it.type === "map") {
       inner = `<div class="map-frame"><div class="map" data-map="${esc(it.id)}"></div></div>`;
+    } else if (it.type === "draw") {
+      inner = `
+        <svg viewBox="0 0 ${it.vw} ${it.vh}" preserveAspectRatio="none" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          ${it.paths.map((p) => {
+            const d = pathD(p.pts);
+            // A wider invisible copy of each line makes thin lines easy to grab
+            return `<path class="hit" d="${d}" stroke="transparent" stroke-width="${p.width + 16}"/><path d="${d}" stroke="${esc(p.color)}" stroke-width="${p.width}"${p.alpha ? ` stroke-opacity="${p.alpha}"` : ""}/>`;
+          }).join("")}
+        </svg>`;
     }
     return `<div class="item item--${esc(it.type)}" data-id="${esc(it.id)}" style="${boxStyle(it)}">${inner}</div>`;
+  }
+
+  /* ---------- Drawing ---------- */
+
+  // Smooth a stroke by curving through the midpoints between samples
+  function pathD(pts) {
+    if (pts.length < 3) return `M${pts[0]}L${pts[pts.length - 1]}`;
+    let d = `M${pts[0]}`;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = ((pts[i][0] + pts[i + 1][0]) / 2).toFixed(1), my = ((pts[i][1] + pts[i + 1][1]) / 2).toFixed(1);
+      d += `Q${pts[i]} ${mx},${my}`;
+    }
+    return d + `L${pts[pts.length - 1]}`;
+  }
+
+  function startStroke(down, sheet) {
+    const pageIndex = +sheet.dataset.page;
+    const r = sheet.getBoundingClientRect(), s = state.scale;
+    const pen = { color: state.pen.color, ...PENS[state.pen.kind] };
+    const at = (e) => [+((e.clientX - r.left) / s).toFixed(1), +((e.clientY - r.top) / s).toFixed(1)];
+    const pts = [at(down)];
+
+    const ns = "http://www.w3.org/2000/svg";
+    const live = document.createElementNS(ns, "svg");
+    live.setAttribute("class", "ink-live");
+    live.setAttribute("viewBox", `0 0 ${PAGE_W} ${PAGE_H}`);
+    const path = document.createElementNS(ns, "path");
+    Object.entries({ fill: "none", stroke: pen.color, "stroke-width": pen.width, "stroke-linecap": "round", "stroke-linejoin": "round", "stroke-opacity": pen.alpha || 1 })
+      .forEach(([k, v]) => path.setAttribute(k, v));
+    live.append(path);
+    sheet.querySelector(".page").append(live);
+
+    const onMove = (e) => {
+      for (const c of e.getCoalescedEvents ? e.getCoalescedEvents() : [e]) {
+        const p = at(c), last = pts[pts.length - 1];
+        if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= 1.5) pts.push(p);
+      }
+      path.setAttribute("d", pathD(pts));
+    };
+    const onUp = () => {
+      removeEventListener("pointermove", onMove);
+      removeEventListener("pointerup", onUp);
+      removeEventListener("pointercancel", onUp);
+      live.remove();
+      if (pts.length === 1) pts.push([pts[0][0] + 0.5, pts[0][1] + 0.5]);
+      addStroke(pageIndex, pts, pen);
+    };
+    addEventListener("pointermove", onMove);
+    addEventListener("pointerup", onUp);
+    addEventListener("pointercancel", onUp);
+  }
+
+  // Strokes drawn in one go on the same page join into one doodle you can move as a whole
+  function addStroke(pageIndex, pts, pen) {
+    pushUndo();
+    const page = state.book.pages[pageIndex];
+    const pad = pen.width / 2 + 2;
+    let x0 = Math.min(...pts.map((p) => p[0])) - pad, y0 = Math.min(...pts.map((p) => p[1])) - pad;
+    let x1 = Math.max(...pts.map((p) => p[0])) + pad, y1 = Math.max(...pts.map((p) => p[1])) + pad;
+
+    let it = state.doodle && state.doodle.page === pageIndex && page.items.find((i) => i.id === state.doodle.id);
+    let paths = [];
+    if (it) {
+      x0 = Math.min(x0, it.x); y0 = Math.min(y0, it.y);
+      x1 = Math.max(x1, it.x + it.w); y1 = Math.max(y1, it.y + it.h);
+      paths = it.paths.map((p) => ({ ...p, pts: p.pts.map(([a, b]) => [+(a + it.x - x0).toFixed(1), +(b + it.y - y0).toFixed(1)]) }));
+    }
+    paths.push({ color: pen.color, width: pen.width, alpha: pen.alpha, pts: pts.map(([a, b]) => [+(a - x0).toFixed(1), +(b - y0).toFixed(1)]) });
+    const box = { x: x0, y: y0, w: x1 - x0, h: y1 - y0, vw: x1 - x0, vh: y1 - y0, paths };
+
+    if (it) Object.assign(it, box);
+    else {
+      it = { id: Store.uid(), type: "draw", rot: 0, ...box };
+      page.items.push(it);
+      state.doodle = { page: pageIndex, id: it.id };
+    }
+    commit();
+    const el = itemEl(it.id);
+    if (el) el.outerHTML = itemHTML(it);
+    else document.querySelector(`[data-page="${pageIndex}"] .page`).insertAdjacentHTML("beforeend", itemHTML(it));
   }
 
   function fit() {
@@ -405,6 +505,7 @@
   function turn(step) {
     state.first += step * (single() ? 1 : 2);
     state.sel = null;
+    state.doodle = null;
     state.active = state.first;
     drawSpread();
     drawContext();
@@ -535,6 +636,13 @@
     Object.assign(it, changes);
     commit();
     drawSpread();
+    // Bigger writing makes a post-it or note grow to fit
+    const paper = itemEl(it.id) && itemEl(it.id).querySelector(".postit, .note");
+    if (paper && paper.scrollHeight > it.h) {
+      it.h = paper.scrollHeight;
+      itemEl(it.id).style.cssText = boxStyle(it);
+      select(it.id);
+    }
   }
 
   /* ---------- Photos and videos ---------- */
@@ -645,6 +753,13 @@
       }
       if (e.target.closest("[contenteditable]")) return;
       if (document.activeElement && document.activeElement.isContentEditable) document.activeElement.blur();
+      if (drawing()) {
+        if (sheet) {
+          e.preventDefault();
+          startStroke(e, sheet);
+        }
+        return;
+      }
 
       const el = e.target.closest(".item");
       if (!el) return select(null);
@@ -791,19 +906,26 @@
         <button class="text-link text-link--danger" type="button" data-act="delete-page">Delete page ${state.active + 1}</button>`;
       return;
     }
-    let own = "";
-    if (it.type === "text") {
-      own = `
+    const textControls = (font, ink) => `
         <select data-change="font" aria-label="Font">
-          ${Object.entries(FONTS).map(([n, f]) => `<option value="${esc(f)}" ${f === it.font ? "selected" : ""}>${n}</option>`).join("")}
+          ${Object.entries(FONTS).map(([n, f]) => `<option value="${esc(f)}" ${f === font ? "selected" : ""}>${n}</option>`).join("")}
         </select>
         <button class="mini" type="button" data-act="size" data-v="-4" aria-label="Smaller text">A−</button>
         <button class="mini" type="button" data-act="size" data-v="4" aria-label="Larger text">A+</button>
-        <button class="mini" type="button" data-act="align">${{ left: "Left", center: "Center", right: "Right" }[it.align || "left"]}</button>
-        ${swatches(INK_COLORS, "ink", it.color)}
-        <input type="color" data-change="ink" value="${esc(it.color)}" aria-label="Custom text color">`;
-    } else if (it.type === "postit" || it.type === "note") {
-      own = swatches(it.type === "note" ? ["#fffdf7", ...NOTE_COLORS] : NOTE_COLORS, "paper", it.color);
+        ${swatches(INK_COLORS, "ink", ink)}
+        <input type="color" data-change="ink" value="${esc(ink)}" aria-label="Custom text color">`;
+    let own = "";
+    if (it.type === "text") {
+      own = `
+        ${textControls(it.font, it.color)}
+        <button class="mini" type="button" data-act="align">${{ left: "Left", center: "Center", right: "Right" }[it.align || "left"]}</button>`;
+    } else if (it.type === "postit") {
+      own = `
+        ${textControls(it.font || FONTS.Handwritten, it.ink || "#161412")}
+        <span class="context__label">Paper</span>
+        ${swatches(NOTE_COLORS, "paper", it.color)}`;
+    } else if (it.type === "note") {
+      own = swatches(["#fffdf7", ...NOTE_COLORS], "paper", it.color);
     } else if (it.type === "photo") {
       own = `
         <select data-change="frame" aria-label="Photo frame">
@@ -827,7 +949,23 @@
     if (!box) return;
     box.hidden = !state.drawer;
     document.querySelectorAll("[data-drawer]").forEach((b) => b.classList.toggle("is-on", b.dataset.drawer === state.drawer));
-    if (state.drawer === "stickers") {
+    document.querySelector(".book-view").classList.toggle("is-drawing", drawing());
+    if (!drawing()) state.doodle = null;
+    if (drawing()) {
+      box.innerHTML = `
+        <div class="drawer__group draw-bar">
+          <p class="label">Draw on the page</p>
+          <div class="draw-bar__row">
+            ${Object.keys(PENS).map((k) => `<button class="mini${k === state.pen.kind ? " is-on" : ""}" type="button" data-act="pen" data-v="${k}">${k}</button>`).join("")}
+            <span class="draw-bar__gap"></span>
+            ${swatches(PEN_COLORS, "pen-color", state.pen.color)}
+            <input type="color" data-change="pen-color" value="${esc(state.pen.color)}" aria-label="Custom pen color">
+            <span class="toolbar__gap"></span>
+            <button class="pill pill--solid" type="button" data-act="drawer" data-drawer="draw">Done drawing</button>
+          </div>
+          <p class="hint">Everything you draw now becomes one doodle you can move or resize afterwards. Undo removes the last line.</p>
+        </div>`;
+    } else if (state.drawer === "stickers") {
       const { emoji, graphics } = window.STICKERS;
       box.innerHTML = `
         <div class="drawer__group">
@@ -1043,6 +1181,9 @@
 
   /* ---------- Buttons ---------- */
 
+  // A post-it's color is its paper, so its writing color is kept as ink
+  const inkField = () => (find(state.sel).type === "postit" ? "ink" : "color");
+
   const stickerSize = (b) => {
     if (b.dataset.graphic) {
       const g = window.STICKERS.graphics[b.dataset.graphic];
@@ -1081,9 +1222,12 @@
     redo: () => timeTravel(state.redo, state.undo),
     drawer: (b) => {
       state.drawer = state.drawer === b.dataset.drawer ? null : b.dataset.drawer;
+      if (drawing()) select(null);
       drawDrawer();
       fit();
     },
+    pen: (b) => { state.pen.kind = b.dataset.v; drawDrawer(); },
+    "pen-color": (b) => { state.pen.color = b.dataset.v; drawDrawer(); },
     "add-text": () => addItem({ type: "text", text: "", w: 320, h: 70, font: FONTS.Handwritten, size: 40, color: "#161412", align: "left" }),
     "add-note": () => addItem({ type: "note", when: "", title: "", text: "", w: 300, h: 210, color: "#fffdf7", rot: -1 }),
     "add-postit": () => addItem({ type: "postit", text: "", w: 190, h: 190, color: NOTE_COLORS[hash(Store.uid()) % NOTE_COLORS.length], rot: 2 }),
@@ -1125,9 +1269,12 @@
     backward: () => layer(-1),
     duplicate,
     remove: removeSelected,
-    size: (b) => update({ size: Math.max(12, find(state.sel).size + +b.dataset.v) }),
+    size: (b) => {
+      const it = find(state.sel);
+      update({ size: Math.max(12, (it.size || (it.type === "postit" ? 29 : 40)) + +b.dataset.v) });
+    },
     align: () => update({ align: { left: "center", center: "right", right: "left" }[find(state.sel).align || "left"] }),
-    ink: (b) => update({ color: b.dataset.v }),
+    ink: (b) => update({ [inkField()]: b.dataset.v }),
     paper: (b) => update({ color: b.dataset.v }),
     replace: () => document.getElementById("replaceIn").click(),
     places: placesDialog
@@ -1141,11 +1288,15 @@
   app.addEventListener("change", (e) => {
     const kind = e.target.dataset.change;
     if (kind === "font") update({ font: e.target.value });
-    if (kind === "ink") update({ color: e.target.value });
+    if (kind === "ink") update({ [inkField()]: e.target.value });
     if (kind === "frame") {
       const it = find(state.sel);
       const was = (it.frame || "polaroid") === "polaroid", now = e.target.value === "polaroid";
       update({ frame: e.target.value, h: it.h + (now === was ? 0 : now ? 58 : -58) });
+    }
+    if (kind === "pen-color") {
+      state.pen.color = e.target.value;
+      drawDrawer();
     }
     if (kind === "pagecolor") {
       pushUndo();
