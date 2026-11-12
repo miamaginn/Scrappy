@@ -6,7 +6,10 @@
   // Pages are laid out on a fixed 600 x 800 sheet and scaled to fit the screen
   const PAGE_W = 600, PAGE_H = 800;
 
-  const SPINE_COLORS = ["#161412", "#7d2e2a", "#2f4a3c", "#27405e", "#b3823a", "#b9614a", "#5a4a6b", "#d9cfba"];
+  const SPINE_COLORS = [
+    "#c8473a", "#e06c4c", "#e58fa7", "#b0476e", "#7b5ea7", "#2f6fa8", "#5bb3e0",
+    "#3aa6a0", "#2e7d5b", "#9bbf5a", "#f2c94c", "#e0a43a", "#e8ddc4", "#161412"
+  ];
   const NOTE_COLORS = ["#fbe98a", "#f9b9c6", "#b6e3d4", "#bcd7f3", "#f7c98b"];
   const INK_COLORS = ["#161412", "#a8402f", "#27405e", "#2f6b4f", "#ffffff"];
   const FONTS = {
@@ -161,7 +164,7 @@
   }
 
   function bookDialog(book) {
-    const color = book ? book.color : SPINE_COLORS[hash(Store.uid()) % 7];
+    const color = book ? book.color : SPINE_COLORS[hash(Store.uid()) % 12];
     openOverlay(`
       <header class="overlay-head">
         <p class="eyebrow">${book ? "Book details" : "A new scrapbook"}</p>
