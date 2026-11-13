@@ -24,7 +24,8 @@ Syncing uses [Supabase](https://supabase.com) (free tier: 500 MB database, 1 GB 
    - **Redirect URLs:** add that same address, plus `http://localhost:5174` for testing on your computer.
 4. **Connect the site.** Open **Project Settings → API**, copy the **Project URL** and the **anon public** key, and paste them into `config.js`. (The anon key is designed to be public; the database rules are what protect your books.)
 5. **Sign in.** Visit the site, click **Owner sign-in** at the bottom of the shelf, enter your email, and open the link it sends you. Do this on each device you want to edit from.
-6. **Lock the door.** Once you've signed in once, go to **Authentication → Sign In / Providers** and turn off **Allow new users to sign up**, so nobody else can make an account on your site.
+6. **Add the sign-in code to the email.** In **Authentication → Emails → Magic Link**, add this line to the message and save: `<p>Or type this code on the site: <strong>{{ .Token }}</strong></p>`. Typing the code works on any device, and keeps working even if your email app "checks" the link first (which uses it up).
+7. **Lock the door.** Once you've signed in once, go to **Authentication → Sign In / Providers** and turn off **Allow new users to sign up**, so nobody else can make an account on your site.
 
 Once you're signed in:
 
