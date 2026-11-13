@@ -280,7 +280,7 @@
         </nav>
         ${state.editing ? `
           <div class="toolbar">
-            <label class="tool">Photo / video<input id="fileIn" type="file" accept="image/*,video/*" multiple hidden></label>
+            <label class="tool">Photo / video<input id="fileIn" type="file" accept="image/*,video/*,.heic,.heif" multiple hidden></label>
             <button class="tool" type="button" data-act="add-text">Text</button>
             <button class="tool" type="button" data-act="add-note">Activity note</button>
             <button class="tool" type="button" data-act="add-postit">Post-it</button>
@@ -295,7 +295,7 @@
           </div>
           <div class="drawer" id="drawer" hidden></div>
           <div class="context" id="context"></div>
-          <input id="replaceIn" type="file" accept="image/*,video/*" hidden>` : ""}
+          <input id="replaceIn" type="file" accept="image/*,video/*,.heic,.heif" hidden>` : ""}
         <div class="spread" id="spread"></div>
         <div class="pager" id="pager"></div>
       </section>`;
@@ -650,9 +650,37 @@
 
   /* ---------- Photos and videos ---------- */
 
+  // iPhone photos are often HEIC, which only Safari can read. Elsewhere they're
+  // converted to JPEG with heic2any, loaded the first time it's needed.
+  const isHeic = (f) => /image\/hei[cf]/.test(f.type) || /\.hei[cf]$/i.test(f.name || "");
+  let heicConverter = null;
+
+  function loadHeicConverter() {
+    heicConverter = heicConverter || new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";
+      s.onload = () => resolve(window.heic2any);
+      s.onerror = () => { heicConverter = null; reject(new Error("offline")); };
+      document.head.append(s);
+    });
+    return heicConverter;
+  }
+
+  async function decode(file) {
+    try {
+      return await createImageBitmap(file);
+    } catch (e) {
+      if (!isHeic(file)) throw e;
+      toast("Converting an iPhone photo…");
+      const heic2any = await loadHeicConverter();
+      const out = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
+      return createImageBitmap(Array.isArray(out) ? out[0] : out);
+    }
+  }
+
   function prepImage(file) {
     if (file.type === "image/gif") return dimensions(file).then((d) => ({ blob: file, ...d }));
-    return createImageBitmap(file).then((bmp) => {
+    return decode(file).then((bmp) => {
       const k = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
       const w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
       const canvas = document.createElement("canvas");
@@ -694,7 +722,7 @@
   }
 
   async function addFiles(files, at) {
-    files = files.filter((f) => /^(image|video)\//.test(f.type));
+    files = files.filter((f) => /^(image|video)\//.test(f.type) || isHeic(f));
     if (!files.length) return;
     toast(files.length > 1 ? `Adding ${files.length} files…` : "Adding…");
     let i = 0;
