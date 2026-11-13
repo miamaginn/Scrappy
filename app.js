@@ -263,7 +263,11 @@
         const { error } = await Store.signIn(email);
         form.querySelector("button").disabled = false;
         if (error) {
-          msg.textContent = `Couldn't send the email: ${error.message}`;
+          // Supabase's free email service only sends a couple of sign-in emails an hour
+          msg.textContent = /rate limit/i.test(error.message)
+            ? "Supabase only sends 2 sign-in emails an hour, and they've been used. Wait about an hour, then send one and type its code. If an earlier email is still in your inbox, try its code below first."
+            : `Couldn't send the email: ${error.message}`;
+          if (/rate limit/i.test(error.message)) codeForm.hidden = false;
           return;
         }
         memory.set("shelf-email", email);
