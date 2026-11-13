@@ -246,8 +246,8 @@
         <button class="pill pill--solid" type="submit">Email me a link</button>
         <p class="hint" id="signInMsg" role="status"></p>
       </form>
-      <form class="form code-form" id="codeForm" hidden>
-        <label>Or type the code from the email
+      <form class="form code-form" id="codeForm">
+        <label>Already have a code? Type it here
           <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10" required placeholder="123456">
         </label>
         <button class="pill" type="submit">Sign in with code</button>
@@ -267,17 +267,20 @@
           msg.textContent = /rate limit/i.test(error.message)
             ? "Supabase only sends 2 sign-in emails an hour, and they've been used. Wait about an hour, then send one and type its code. If an earlier email is still in your inbox, try its code below first."
             : `Couldn't send the email: ${error.message}`;
-          if (/rate limit/i.test(error.message)) codeForm.hidden = false;
           return;
         }
         memory.set("shelf-email", email);
         msg.textContent = "Sent! Open the newest email's link on this device, or type its code below.";
-        codeForm.hidden = false;
         codeForm.code.focus();
       };
       codeForm.onsubmit = async (e) => {
         e.preventDefault();
         const msg = root.querySelector("#codeMsg");
+        if (!form.email.checkValidity()) {
+          msg.textContent = "Type your email above first.";
+          return form.email.focus();
+        }
+        memory.set("shelf-email", form.email.value.trim());
         codeForm.querySelector("button").disabled = true;
         const { error } = await Store.verifyCode(form.email.value.trim(), codeForm.code.value.trim());
         codeForm.querySelector("button").disabled = false;
@@ -1306,7 +1309,7 @@
 
   const actions = {
     "new-book": () => bookDialog(null),
-    "sign-in": signInDialog,
+    "sign-in": () => signInDialog(),
     "sign-out": async () => {
       await saveNow();
       await Store.signOut();
