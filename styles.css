@@ -555,6 +555,9 @@ a.spine.is-pulling { transform: translateY(-60px) rotate(-4deg) scale(1.04); tra
 .form .check { display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer; }
 .check input { width: 1.1rem; height: 1.1rem; margin-top: 0.3rem; accent-color: var(--ink); }
 .check small { display: block; font-size: 0.85rem; font-style: italic; color: var(--ink-soft); }
+.sync-note { margin: 1.4rem auto 0; max-width: 34rem; font-size: 0.95rem; font-style: italic; color: var(--ink-soft); }
+.sync-note.is-problem { color: var(--accent); font-style: normal; }
+.save-status.is-problem { color: var(--accent); cursor: help; }
 .shelf-tools { display: flex; justify-content: center; gap: 1.6rem; }
 
 .swatches { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }

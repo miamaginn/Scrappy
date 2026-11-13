@@ -84,10 +84,14 @@ window.Store = (function () {
   }
 
   const queue = new Map();
+  let lastError = null;
+  const describe = (e) => String((e && (e.message || e.error)) || e || "unknown error").slice(0, 140);
 
   // Syncs run one at a time per book, always from the newest copy in this browser
   function sync(id) {
-    const next = (queue.get(id) || Promise.resolve()).then(() => upload(id), () => upload(id));
+    const next = (queue.get(id) || Promise.resolve())
+      .then(() => upload(id), () => upload(id))
+      .then((ok) => { lastError = null; return ok; }, (e) => { lastError = describe(e); throw e; });
     queue.set(id, next);
     return next;
   }
@@ -99,11 +103,18 @@ window.Store = (function () {
     if (rec.owner && rec.owner !== user.id) return true;
     if (!rec._dirty && rec._synced) return true;
 
+    // A photo that won't upload shouldn't hold back the rest of the book;
+    // it stays here and is retried on the next sync
+    const problems = [];
     for (const m of mediaIds(rec)) {
       const file = await getMedia(m);
       if (!file || file.uploaded) continue;
       const { error } = await sb.storage.from("media").upload(`${user.id}/${m}`, file.blob, { contentType: file.blob.type, upsert: true });
-      if (error) throw error;
+      if (error) {
+        console.error("Upload failed", m, error);
+        problems.push(describe(error));
+        continue;
+      }
       await run("media", "readwrite", (s) => s.put({ ...file, uploaded: true }));
     }
 
@@ -118,8 +129,15 @@ window.Store = (function () {
 
     // Only mark it clean if nothing changed while we were uploading
     const now = await idbBook(id);
-    if (now && now.updated === rec.updated) await idbPutBook({ ...now, owner: user.id, _dirty: false, _synced: true });
+    if (now && now.updated === rec.updated) await idbPutBook({ ...now, owner: user.id, _dirty: problems.length > 0, _synced: true });
+    if (problems.length) throw new Error(`${problems.length} photo or video couldn't upload (${problems[0]})`);
     return true;
+  }
+
+  // How many books in this browser still have changes that haven't reached the cloud
+  async function pending() {
+    if (!sb || !user) return 0;
+    return (await idbBooks()).filter((b) => (!b.owner || b.owner === user.id) && (b._dirty || !b._synced)).length;
   }
 
   let syncingAll = null;
@@ -169,13 +187,15 @@ window.Store = (function () {
 
   /* ---------- Saving ---------- */
 
-  // Saves here right away, then syncs. `synced` settles to true once the
-  // cloud has it, or false if that has to wait (offline, signed out).
+  // Saves here right away, then syncs. `synced` settles to { ok } once the
+  // cloud has it, or { ok: false, error } saying why it has to wait.
   async function putBook(book) {
     const prev = await idbBook(book.id);
     const owner = user ? user.id : prev && prev.owner;
     await idbPutBook({ ...clean(book), owner, _dirty: true, _synced: !!(prev && prev._synced) });
-    const synced = sb && user ? sync(book.id).catch(() => false) : Promise.resolve(false);
+    const synced = sb && user
+      ? sync(book.id).then(() => ({ ok: true }), (e) => ({ ok: false, error: describe(e) }))
+      : Promise.resolve({ ok: false, error: "signed out" });
     return { cloud: !!(sb && user), synced };
   }
 
@@ -280,7 +300,7 @@ window.Store = (function () {
     cloud: !!sb,
     user: () => user,
     onAuth: (fn) => authListeners.push(fn),
-    ready, signIn, verifyCode, signOut, syncAll,
+    ready, signIn, verifyCode, signOut, syncAll, pending, lastError: () => lastError,
     uid, mediaId, allBooks, getBook, localBooks: idbBooks, putBook, deleteBook, putMedia, mediaUrl, exportBook, importBook
   };
 })();

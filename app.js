@@ -145,6 +145,7 @@
             <div class="shelf__plank"></div>
           </div>`).join("")}
         ${books.length || isOwner() ? "" : `<p class="lede">The shelf is empty for now.</p>`}
+        ${Store.cloud && Store.user() ? `<p class="sync-note" id="syncNote" role="status"></p>` : ""}
         <p class="shelf-tools">
           ${isOwner() ? `<label class="text-link">Import a scrapbook<input id="importIn" type="file" accept=".zip" hidden></label>` : ""}
           ${Store.cloud
@@ -164,6 +165,8 @@
       })
     );
 
+    showSyncNote();
+
     const importIn = document.getElementById("importIn");
     if (importIn) importIn.onchange = async () => {
       if (!window.JSZip) return toast("Importing needs an internet connection");
@@ -172,6 +175,18 @@
         location.hash = `#/trip/${book.id}`;
       } catch (e) { toast(e.message); }
     };
+  }
+
+  // Tells you on the shelf whether everything made on this device has reached your account
+  async function showSyncNote() {
+    const note = document.getElementById("syncNote");
+    if (!note) return;
+    const n = await Store.pending();
+    note.classList.toggle("is-problem", n > 0);
+    note.innerHTML = n
+      ? `${n} ${n === 1 ? "book has" : "books have"} changes on this device that haven't synced yet${Store.lastError() ? ` (${esc(Store.lastError())})` : ""}.
+         <button class="text-link" type="button" data-act="sync-now">Try again</button>`
+      : "✓ Everything is saved to your account.";
   }
 
   function bookDialog(book) {
@@ -573,8 +588,14 @@
       const saved = await Store.putBook(state.book);
       if (!saved.cloud) return setStatus("Saved on this device");
       setStatus("Syncing…");
-      saved.synced.then((ok) => {
-        if (!state.saveTimer) setStatus(ok ? "Saved" : "Saved here · will sync when you're online");
+      saved.synced.then((r) => {
+        if (state.saveTimer) return;
+        setStatus(r.ok ? "Saved" : "Saved on this device only");
+        const el = document.getElementById("saveStatus");
+        if (el) {
+          el.classList.toggle("is-problem", !r.ok);
+          el.title = r.ok ? "" : `Not synced yet: ${r.error}. It'll keep retrying.`;
+        }
       });
     } catch {
       setStatus("Couldn't save");
@@ -1310,6 +1331,12 @@
   const actions = {
     "new-book": () => bookDialog(null),
     "sign-in": () => signInDialog(),
+    "sync-now": async () => {
+      const note = document.getElementById("syncNote");
+      if (note) note.textContent = "Syncing…";
+      await Store.syncAll();
+      showSyncNote();
+    },
     "sign-out": async () => {
       await saveNow();
       await Store.signOut();
@@ -1504,6 +1531,19 @@
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
 
   Store.onAuth(() => { if (!state.editing) render(); });
+
+  // Coming back to a tab: pick up anything changed on another device, so an
+  // old copy left open here never saves over newer work
+  document.addEventListener("visibilitychange", async () => {
+    if (document.hidden || !state.book || !Store.cloud || !Store.user()) return;
+    if (state.saveTimer || (document.activeElement && document.activeElement.isContentEditable)) return;
+    const fresh = await Store.getBook(state.book.id);
+    if (!fresh || (fresh.updated || 0) <= (state.book.updated || 0)) return;
+    Object.assign(state, { book: fresh, sel: null, undo: [], redo: [], doodle: null });
+    drawSpread();
+    updateUndoButtons();
+    toast("Updated with changes from another device");
+  });
   Store.ready()
     .catch(() => toast("Couldn't reach the cloud. Showing what's saved here."))
     .then(() => {
