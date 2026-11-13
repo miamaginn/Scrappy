@@ -70,11 +70,11 @@
   };
 
   let toastTimer;
-  function toast(msg) {
+  function toast(msg, ms = 3200) {
     toastEl.textContent = msg;
     toastEl.classList.add("is-on");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastEl.classList.remove("is-on"), 3200);
+    toastTimer = setTimeout(() => toastEl.classList.remove("is-on"), ms);
   }
 
   /* ---------- Routing ---------- */
@@ -651,19 +651,43 @@
   /* ---------- Photos and videos ---------- */
 
   // iPhone photos are often HEIC, which only Safari can read. Elsewhere they're
-  // converted to JPEG with heic2any, loaded the first time it's needed.
+  // converted to JPEG: heic-to (a current libheif) first, heic2any as a backup.
+  // Each converter is downloaded the first time it's needed.
   const isHeic = (f) => /image\/hei[cf]/.test(f.type) || /\.hei[cf]$/i.test(f.name || "");
-  let heicConverter = null;
+  const scripts = new Map();
 
-  function loadHeicConverter() {
-    heicConverter = heicConverter || new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";
-      s.onload = () => resolve(window.heic2any);
-      s.onerror = () => { heicConverter = null; reject(new Error("offline")); };
-      document.head.append(s);
-    });
-    return heicConverter;
+  function loadScript(src) {
+    if (!scripts.has(src)) {
+      scripts.set(src, new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = () => { scripts.delete(src); reject(new Error("couldn't download the converter")); };
+        document.head.append(s);
+      }));
+    }
+    return scripts.get(src);
+  }
+
+  const reason = (e) => String((e && (e.message || e.code)) || e || "unknown error").slice(0, 120);
+
+  async function convertHeic(file) {
+    toast("Converting an iPhone photo…", 20000);
+    const problems = [];
+    try {
+      await loadScript("https://cdn.jsdelivr.net/npm/heic-to@1.6.6/dist/iife/heic-to.js");
+      return await window.HeicTo({ blob: file, type: "image/jpeg", quality: 0.92 });
+    } catch (e) {
+      problems.push(reason(e));
+    }
+    try {
+      await loadScript("https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js");
+      const out = await window.heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
+      return Array.isArray(out) ? out[0] : out;
+    } catch (e) {
+      problems.push(reason(e));
+    }
+    throw new Error(problems.join("; "));
   }
 
   async function decode(file) {
@@ -671,10 +695,7 @@
       return await createImageBitmap(file);
     } catch (e) {
       if (!isHeic(file)) throw e;
-      toast("Converting an iPhone photo…");
-      const heic2any = await loadHeicConverter();
-      const out = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
-      return createImageBitmap(Array.isArray(out) ? out[0] : out);
+      return createImageBitmap(await convertHeic(file));
     }
   }
 
@@ -734,8 +755,9 @@
         addItem({ type, media, w, h, frame: type === "photo" ? "polaroid" : "none", caption: "", rot: i % 2 ? 2 : -2 },
           at && { x: at.x + i * 24, y: at.y + i * 24 });
         i += 1;
-      } catch {
-        toast(`Couldn't add ${file.name}. Try a JPEG or PNG, or a smaller video.`);
+      } catch (e) {
+        console.error(file.name, e);
+        toast(`Couldn't add ${file.name} (${reason(e)}). Try a JPEG or PNG, or a smaller video.`, 12000);
       }
     }
     if (i) toast(i > 1 ? `Added ${i} files` : "Added");
@@ -747,8 +769,9 @@
       const { media, type, ratio } = await storeFile(file);
       const it = find(state.sel);
       update({ media, type, h: Math.round(it.w * ratio) + (type === "photo" && (it.frame || "polaroid") === "polaroid" ? 58 : 0) });
-    } catch {
-      toast("Couldn't use that file. Try a JPEG or PNG.");
+    } catch (e) {
+      console.error(file.name, e);
+      toast(`Couldn't use that file (${reason(e)}). Try a JPEG or PNG.`, 12000);
     }
   }
 
