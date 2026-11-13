@@ -566,6 +566,10 @@ a.spine.is-pulling { transform: translateY(-60px) rotate(-4deg) scale(1.04); tra
 .swatch-custom { display: inline-flex !important; align-items: center; gap: 0.35rem; font-size: 0.9rem; }
 .swatch-custom input { width: 2rem; height: 2rem; padding: 1px; border: 1px solid var(--rule); background: none; cursor: pointer; }
 
+.form-problem { margin: 0.6rem 0 0; padding: 0.6rem 0.8rem; border-left: 3px solid var(--accent); background: rgba(168, 64, 47, 0.08); font-size: 0.95rem; text-align: left; }
+.code-form { margin-top: 1.4rem; padding-top: 1.2rem; border-top: 1px solid var(--rule); }
+.code-form input[name="code"] { letter-spacing: 0.3em; font-size: 1.3rem; text-align: center; }
+
 .form-extra { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-top: 1.4rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: 0.98rem; }
 
 .places { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.2rem; }

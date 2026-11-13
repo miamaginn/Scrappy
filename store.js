@@ -272,13 +272,15 @@ window.Store = (function () {
 
   const signIn = (email) =>
     sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+  // The sign-in email can also carry a short code, typed in instead of opening the link
+  const verifyCode = (email, token) => sb.auth.verifyOtp({ email, token, type: "email" });
   const signOut = () => sb.auth.signOut();
 
   return {
     cloud: !!sb,
     user: () => user,
     onAuth: (fn) => authListeners.push(fn),
-    ready, signIn, signOut, syncAll,
+    ready, signIn, verifyCode, signOut, syncAll,
     uid, mediaId, allBooks, getBook, localBooks: idbBooks, putBook, deleteBook, putMedia, mediaUrl, exportBook, importBook
   };
 })();

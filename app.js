@@ -232,26 +232,56 @@
 
   const blankPage = () => ({ id: Store.uid(), bg: "cream", items: [] });
 
-  function signInDialog() {
+  function signInDialog(problem) {
     openOverlay(`
       <header class="overlay-head">
         <p class="eyebrow">Owner sign-in</p>
         <h2 class="masthead__title masthead__title--sm">Welcome back</h2>
-        <p class="hint">We'll email you a sign-in link. Open it on the device you want to use.</p>
+        ${problem
+          ? `<p class="form-problem">That sign-in link didn't work: ${esc(problem)}.<br>Links work once and expire after an hour, so send yourself a fresh one below.</p>`
+          : `<p class="hint">We'll email you a sign-in link and a code.</p>`}
       </header>
       <form class="form" id="signInForm">
-        <label>Email<input type="email" name="email" required autocomplete="email"></label>
+        <label>Email<input type="email" name="email" required autocomplete="email" value="${esc(memory.get("shelf-email") || "")}"></label>
         <button class="pill pill--solid" type="submit">Email me a link</button>
         <p class="hint" id="signInMsg" role="status"></p>
+      </form>
+      <form class="form code-form" id="codeForm" hidden>
+        <label>Or type the code from the email
+          <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10" required placeholder="123456">
+        </label>
+        <button class="pill" type="submit">Sign in with code</button>
+        <p class="hint" id="codeMsg" role="status"></p>
       </form>`, "form", (root) => {
       const form = root.querySelector("#signInForm");
+      const codeForm = root.querySelector("#codeForm");
       form.onsubmit = async (e) => {
         e.preventDefault();
         const msg = root.querySelector("#signInMsg");
+        const email = form.email.value.trim();
         form.querySelector("button").disabled = true;
-        const { error } = await Store.signIn(form.email.value.trim());
-        msg.textContent = error ? `Couldn't send the link: ${error.message}` : "Check your email for the link. You can close this.";
+        const { error } = await Store.signIn(email);
         form.querySelector("button").disabled = false;
+        if (error) {
+          msg.textContent = `Couldn't send the email: ${error.message}`;
+          return;
+        }
+        memory.set("shelf-email", email);
+        msg.textContent = "Sent! Open the newest email's link on this device, or type its code below.";
+        codeForm.hidden = false;
+        codeForm.code.focus();
+      };
+      codeForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const msg = root.querySelector("#codeMsg");
+        codeForm.querySelector("button").disabled = true;
+        const { error } = await Store.verifyCode(form.email.value.trim(), codeForm.code.value.trim());
+        codeForm.querySelector("button").disabled = false;
+        if (error) msg.textContent = `That code didn't work: ${error.message}. Use the code from the newest email.`;
+        else {
+          closeOverlay();
+          toast("Signed in");
+        }
       };
     });
   }
@@ -1470,8 +1500,12 @@
   Store.ready()
     .catch(() => toast("Couldn't reach the cloud. Showing what's saved here."))
     .then(() => {
-      // Coming back from a sign-in link leaves tokens in the address bar
-      if (/access_token|error_description/.test(location.hash)) history.replaceState(null, "", location.pathname + "#/");
-      render();
+      // Coming back from a sign-in link leaves tokens, or the reason it failed, in the address bar
+      const back = new URLSearchParams(location.hash.replace(/^#\/?/, ""));
+      const problem = back.get("error_description");
+      if (back.has("access_token") || problem) history.replaceState(null, "", location.pathname + "#/");
+      render().then(() => {
+        if (problem && !Store.user()) signInDialog(problem.replace(/\+/g, " "));
+      });
     });
 })();
